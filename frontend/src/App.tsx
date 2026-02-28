@@ -17,6 +17,7 @@ function App() {
   const [activeScenario, setActiveScenario] = useState("downtown_mix");
   const [routeView, setRouteView] = useState<RouteView>("optimized");
   const [streamingText, setStreamingText] = useState("");
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Load scenarios list
@@ -33,6 +34,7 @@ function App() {
     setError(null);
     setRouteView("optimized");
     setStreamingText("");
+    setStreamStatus(null);
     fetch(`/api/seed?scenario=${activeScenario}`)
       .then((r) => r.json())
       .then((data) => {
@@ -46,6 +48,7 @@ function App() {
     setLoading(true);
     setError(null);
     setStreamingText("");
+    setStreamStatus(null);
     setOptimizeResponse(null);
 
     const controller = new AbortController();
@@ -84,7 +87,12 @@ function App() {
 
           if (payload.type === "token") {
             setStreamingText((prev) => prev + payload.text);
+          } else if (payload.type === "status") {
+            setStreamStatus(payload.message);
+          } else if (payload.type === "error") {
+            throw new Error(payload.message);
           } else if (payload.type === "result") {
+            setStreamStatus(null);
             const data = payload.data as OptimizeResponse;
             setOptimizeResponse(data);
             setRouteView("optimized");
@@ -212,6 +220,7 @@ function App() {
             result={optimizeResponse?.result ?? null}
             loading={loading}
             streamingText={streamingText}
+            streamStatus={streamStatus}
             naiveMiles={optimizeResponse?.naive_miles ?? null}
             optimizedMiles={optimizeResponse?.optimized_miles ?? null}
             naiveViolations={optimizeResponse?.naive_violations ?? null}

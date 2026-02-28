@@ -5,6 +5,7 @@ interface ReasoningPanelProps {
   result: OptimizationResult | null;
   loading: boolean;
   streamingText: string;
+  streamStatus: string | null;
   naiveMiles: number | null;
   optimizedMiles: number | null;
   naiveViolations: number | null;
@@ -15,6 +16,7 @@ export function ReasoningPanel({
   result,
   loading,
   streamingText,
+  streamStatus,
   naiveMiles,
   optimizedMiles,
   naiveViolations,
@@ -28,6 +30,30 @@ export function ReasoningPanel({
       streamRef.current.scrollTop = streamRef.current.scrollHeight;
     }
   }, [streamingText]);
+
+  if (loading && streamStatus) {
+    return (
+      <div className="flex flex-col gap-3 h-full">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            Claude is reasoning...
+          </h2>
+        </div>
+        <pre
+          ref={streamRef}
+          className="flex-1 bg-gray-900 text-green-400 rounded-lg p-3 text-xs font-mono
+                     overflow-y-auto whitespace-pre-wrap break-words opacity-50"
+        >
+          {streamingText}
+        </pre>
+        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+          <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+          <span className="text-sm text-indigo-700 font-medium">{streamStatus}</span>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && streamingText) {
     return (

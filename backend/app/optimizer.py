@@ -239,15 +239,22 @@ async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
             yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
 
     # Parse the completed response
-    cleaned = full_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+    try:
+        cleaned = full_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
 
-    parsed = json.loads(cleaned)
-    result = OptimizationResult(**parsed)
+        parsed = json.loads(cleaned)
+        result = OptimizationResult(**parsed)
+    except (json.JSONDecodeError, Exception) as e:
+        yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to parse Claude response: {str(e)}'})}\n\n"
+        return
+
+    # Signal that we're now computing road routes
+    yield f"data: {json.dumps({'type': 'status', 'message': 'Computing road routes...'})}\n\n"
 
     # Enrich with polylines (both optimized and naive)
     enriched_assignments, optimized_road_miles = await enrich_with_polylines(
