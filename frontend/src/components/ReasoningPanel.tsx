@@ -96,11 +96,11 @@ export function ReasoningPanel({
     );
   }
 
-  const showComparison = naiveMiles != null && optimizedMiles != null;
-  const milesSaved = showComparison ? naiveMiles! - optimizedMiles! : null;
-  const pctSaved = showComparison && naiveMiles! > 0
-    ? Math.round((milesSaved! / naiveMiles!) * 100)
-    : null;
+  const nm = naiveMiles ?? 0;
+  const om = optimizedMiles ?? 0;
+  const showComparison = nm > 0 || om > 0;
+  const milesSaved = nm - om;
+  const pctSaved = nm > 0 ? Math.round((milesSaved / nm) * 100) : null;
 
   return (
     <div className="flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-180px)]">
@@ -112,16 +112,16 @@ export function ReasoningPanel({
       {showComparison && (
         <div className="border rounded-lg overflow-hidden">
           {/* Savings hero */}
-          {milesSaved != null && milesSaved > 0 && (
+          {milesSaved > 0 && pctSaved != null && (
             <div className="bg-green-600 text-white text-center py-3 px-3">
               <div className="text-3xl font-black tracking-tight">{pctSaved}%</div>
               <div className="text-sm font-medium opacity-90">more efficient</div>
               <div className="text-xs opacity-75 mt-0.5">{milesSaved.toFixed(1)} miles saved</div>
             </div>
           )}
-          {milesSaved != null && milesSaved <= 0 && naiveViolations != null && naiveViolations > optimizedViolations! && (
+          {milesSaved <= 0 && naiveViolations != null && optimizedViolations != null && naiveViolations > optimizedViolations && (
             <div className="bg-green-600 text-white text-center py-3 px-3">
-              <div className="text-3xl font-black tracking-tight">{naiveViolations - optimizedViolations!}</div>
+              <div className="text-3xl font-black tracking-tight">{naiveViolations - optimizedViolations}</div>
               <div className="text-sm font-medium opacity-90">fewer violations</div>
             </div>
           )}
@@ -130,7 +130,7 @@ export function ReasoningPanel({
             <div className="flex items-center justify-between px-3 py-2 bg-red-50">
               <span className="text-xs font-semibold text-red-500 uppercase tracking-wide">Round-Robin</span>
               <div className="text-right">
-                <span className="text-lg font-bold text-red-600">{naiveMiles} mi</span>
+                <span className="text-lg font-bold text-red-600">{nm} mi</span>
                 {naiveViolations != null && naiveViolations > 0 && (
                   <span className="text-[10px] text-red-400 ml-2">
                     {naiveViolations} violation{naiveViolations !== 1 ? "s" : ""}
@@ -141,7 +141,7 @@ export function ReasoningPanel({
             <div className="flex items-center justify-between px-3 py-2 bg-green-50">
               <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">AI Optimized</span>
               <div className="text-right">
-                <span className="text-lg font-bold text-green-700">{optimizedMiles} mi</span>
+                <span className="text-lg font-bold text-green-700">{om} mi</span>
                 {optimizedViolations != null && (
                   <span className="text-[10px] text-green-500 ml-2">
                     {optimizedViolations === 0 ? "0 violations" : `${optimizedViolations} violation${optimizedViolations !== 1 ? "s" : ""}`}
