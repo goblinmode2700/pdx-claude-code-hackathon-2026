@@ -1,3 +1,6 @@
+export type ServiceType = "transfer" | "airport_arrival" | "airport_departure" | "hourly" | "point_to_point";
+export type VehicleTypeEnum = "sedan" | "suv" | "van" | "sprinter";
+
 export interface Ride {
   id: string;
   pickup_lat: number;
@@ -10,6 +13,9 @@ export interface Ride {
   priority: "low" | "medium" | "high" | "urgent";
   pickup_label: string;
   dropoff_label: string;
+  service_type: ServiceType;
+  luggage_count: number;
+  notes: string;
 }
 
 export interface Vehicle {
@@ -19,6 +25,8 @@ export interface Vehicle {
   current_lng: number;
   capacity: number;
   status: "available" | "en_route" | "on_trip" | "off_duty";
+  vehicle_type: VehicleTypeEnum;
+  luggage_capacity: number;
 }
 
 export interface RouteAssignment {
@@ -31,6 +39,20 @@ export interface OptimizationResult {
   assignments: RouteAssignment[];
   overall_strategy: string;
   unassigned_rides: string[];
+}
+
+export interface OptimizeResponse {
+  result: OptimizationResult;
+  prompt_used: string;
+  naive_miles: number;
+  optimized_miles: number;
+  naive_violations: number;
+  optimized_violations: number;
+}
+
+export interface ScenarioInfo {
+  label: string;
+  description: string;
 }
 
 export interface SeedData {

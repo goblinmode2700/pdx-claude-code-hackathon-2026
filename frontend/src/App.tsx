@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Ride, Vehicle, OptimizationResult } from "./types";
+import type { Ride, Vehicle, OptimizeResponse, ScenarioInfo } from "./types";
 import { RouteMap } from "./components/RouteMap";
 import { RidePanel } from "./components/RidePanel";
 import { VehiclePanel } from "./components/VehiclePanel";
@@ -8,20 +8,32 @@ import { ReasoningPanel } from "./components/ReasoningPanel";
 function App() {
   const [rides, setRides] = useState<Ride[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [result, setResult] = useState<OptimizationResult | null>(null);
+  const [optimizeResponse, setOptimizeResponse] = useState<OptimizeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState<Record<string, ScenarioInfo>>({});
+  const [activeScenario, setActiveScenario] = useState("downtown_mix");
 
-  // Load seed data on mount
+  // Load scenarios list
   useEffect(() => {
-    fetch("/api/seed")
+    fetch("/api/scenarios")
+      .then((r) => r.json())
+      .then((data) => setScenarios(data.scenarios))
+      .catch(() => {});
+  }, []);
+
+  // Load seed data when scenario changes
+  useEffect(() => {
+    setOptimizeResponse(null);
+    setError(null);
+    fetch(`/api/seed?scenario=${activeScenario}`)
       .then((r) => r.json())
       .then((data) => {
         setRides(data.rides);
         setVehicles(data.vehicles);
       })
       .catch((e) => setError(`Failed to load seed data: ${e.message}`));
-  }, []);
+  }, [activeScenario]);
 
   const handleOptimize = useCallback(async () => {
     setLoading(true);
@@ -32,9 +44,12 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rides, vehicles }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setResult(data.result);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+      }
+      const data: OptimizeResponse = await res.json();
+      setOptimizeResponse(data);
     } catch (e) {
       setError(`Optimization failed: ${(e as Error).message}`);
     } finally {
@@ -53,9 +68,32 @@ function App() {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          {/* Scenario selector */}
+          <select
+            value={activeScenario}
+            onChange={(e) => setActiveScenario(e.target.value)}
+            className="text-sm border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            {Object.entries(scenarios).map(([key, info]) => (
+              <option key={key} value={key}>
+                {info.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Error with retry */}
           {error && (
-            <span className="text-xs text-red-500 max-w-xs truncate">{error}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-500 max-w-xs truncate">{error}</span>
+              <button
+                onClick={handleOptimize}
+                className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-md hover:bg-red-200 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
           )}
+
           <button
             onClick={handleOptimize}
             disabled={loading || rides.length === 0}
@@ -72,8 +110,8 @@ function App() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar — rides + vehicles */}
         <aside className="w-72 border-r bg-gray-50/50 p-3 overflow-y-auto flex flex-col gap-4">
-          <RidePanel rides={rides} assignments={result?.assignments ?? []} />
-          <VehiclePanel vehicles={vehicles} assignments={result?.assignments ?? []} />
+          <RidePanel rides={rides} assignments={optimizeResponse?.result.assignments ?? []} />
+          <VehiclePanel vehicles={vehicles} assignments={optimizeResponse?.result.assignments ?? []} />
         </aside>
 
         {/* Center — map */}
@@ -81,13 +119,20 @@ function App() {
           <RouteMap
             rides={rides}
             vehicles={vehicles}
-            assignments={result?.assignments ?? []}
+            assignments={optimizeResponse?.result.assignments ?? []}
           />
         </main>
 
         {/* Right sidebar — reasoning */}
         <aside className="w-80 border-l bg-gray-50/50 p-3">
-          <ReasoningPanel result={result} loading={loading} />
+          <ReasoningPanel
+            result={optimizeResponse?.result ?? null}
+            loading={loading}
+            naiveMiles={optimizeResponse?.naive_miles ?? null}
+            optimizedMiles={optimizeResponse?.optimized_miles ?? null}
+            naiveViolations={optimizeResponse?.naive_violations ?? null}
+            optimizedViolations={optimizeResponse?.optimized_violations ?? null}
+          />
         </aside>
       </div>
     </div>

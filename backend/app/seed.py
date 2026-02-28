@@ -1,11 +1,13 @@
-"""Seed data: realistic Portland, OR scenario."""
+"""Seed data: realistic Portland, OR scenarios."""
 
-from .models import Ride, Vehicle, Priority, VehicleStatus
+from .models import Ride, Vehicle, Priority, VehicleStatus, ServiceType, VehicleType
 
 # Portland center: 45.5152, -122.6784
-# ~15 mile radius spread
+# PDX Airport: 45.5898, -122.5951
 
-SEED_RIDES: list[Ride] = [
+# --- Scenario: Downtown Mix (default) ---
+
+DOWNTOWN_MIX_RIDES: list[Ride] = [
     Ride(
         id="R001",
         pickup_lat=45.5231,
@@ -18,6 +20,8 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.HIGH,
         pickup_label="Pearl District",
         dropoff_label="South Waterfront",
+        service_type=ServiceType.TRANSFER,
+        luggage_count=1,
     ),
     Ride(
         id="R002",
@@ -31,6 +35,7 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.MEDIUM,
         pickup_label="Convention Center",
         dropoff_label="NW 23rd Ave",
+        service_type=ServiceType.POINT_TO_POINT,
     ),
     Ride(
         id="R003",
@@ -44,6 +49,9 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.URGENT,
         pickup_label="Milwaukie",
         dropoff_label="PSU Campus",
+        service_type=ServiceType.TRANSFER,
+        luggage_count=3,
+        notes="VIP client — do not be late",
     ),
     Ride(
         id="R004",
@@ -57,6 +65,8 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.MEDIUM,
         pickup_label="Forest Park area",
         dropoff_label="SE Division St",
+        service_type=ServiceType.POINT_TO_POINT,
+        luggage_count=2,
     ),
     Ride(
         id="R005",
@@ -70,6 +80,7 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.LOW,
         pickup_label="Lloyd District",
         dropoff_label="Alberta Arts District",
+        service_type=ServiceType.POINT_TO_POINT,
     ),
     Ride(
         id="R006",
@@ -83,6 +94,9 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.HIGH,
         pickup_label="Sellwood",
         dropoff_label="Downtown Portland",
+        service_type=ServiceType.TRANSFER,
+        luggage_count=4,
+        notes="Group booking — 5 passengers with luggage",
     ),
     Ride(
         id="R007",
@@ -96,6 +110,7 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.MEDIUM,
         pickup_label="St. Johns",
         dropoff_label="Burnside Bridge",
+        service_type=ServiceType.TRANSFER,
     ),
     Ride(
         id="R008",
@@ -109,6 +124,8 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.MEDIUM,
         pickup_label="Tigard",
         dropoff_label="Pioneer Square",
+        service_type=ServiceType.TRANSFER,
+        luggage_count=2,
     ),
     Ride(
         id="R009",
@@ -122,6 +139,8 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.HIGH,
         pickup_label="Cully neighborhood",
         dropoff_label="Mt. Tabor",
+        service_type=ServiceType.POINT_TO_POINT,
+        luggage_count=1,
     ),
     Ride(
         id="R010",
@@ -135,10 +154,142 @@ SEED_RIDES: list[Ride] = [
         priority=Priority.LOW,
         pickup_label="Brooklyn neighborhood",
         dropoff_label="Old Town Chinatown",
+        service_type=ServiceType.POINT_TO_POINT,
     ),
 ]
 
-SEED_VEHICLES: list[Vehicle] = [
+# --- Scenario: Airport Rush (4-5 AM PDX departures) ---
+
+AIRPORT_RUSH_RIDES: list[Ride] = [
+    Ride(
+        id="A001",
+        pickup_lat=45.5231,
+        pickup_lng=-122.6765,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:00:00",
+        time_window_end="2026-02-28T04:20:00",
+        passenger_count=1,
+        priority=Priority.HIGH,
+        pickup_label="Pearl District",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=2,
+        notes="Alaska Airlines 6:15 AM departure",
+    ),
+    Ride(
+        id="A002",
+        pickup_lat=45.5050,
+        pickup_lng=-122.6750,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:10:00",
+        time_window_end="2026-02-28T04:30:00",
+        passenger_count=2,
+        priority=Priority.HIGH,
+        pickup_label="PSU Campus",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=4,
+        notes="Delta 6:30 AM — 2 pax with heavy luggage",
+    ),
+    Ride(
+        id="A003",
+        pickup_lat=45.4894,
+        pickup_lng=-122.6831,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:15:00",
+        time_window_end="2026-02-28T04:35:00",
+        passenger_count=3,
+        priority=Priority.URGENT,
+        pickup_label="South Waterfront",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=5,
+        notes="United 6:00 AM — tight connection, cannot be late",
+    ),
+    Ride(
+        id="A004",
+        pickup_lat=45.5285,
+        pickup_lng=-122.6823,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:20:00",
+        time_window_end="2026-02-28T04:45:00",
+        passenger_count=1,
+        priority=Priority.MEDIUM,
+        pickup_label="NW 23rd Ave",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=1,
+    ),
+    Ride(
+        id="A005",
+        pickup_lat=45.4580,
+        pickup_lng=-122.6320,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:30:00",
+        time_window_end="2026-02-28T04:50:00",
+        passenger_count=4,
+        priority=Priority.HIGH,
+        pickup_label="Sellwood",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=6,
+        notes="Family of 4 with oversized bags",
+    ),
+    Ride(
+        id="A006",
+        pickup_lat=45.5400,
+        pickup_lng=-122.7000,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:40:00",
+        time_window_end="2026-02-28T05:00:00",
+        passenger_count=2,
+        priority=Priority.MEDIUM,
+        pickup_label="St. Johns",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=3,
+    ),
+    Ride(
+        id="A007",
+        pickup_lat=45.4832,
+        pickup_lng=-122.7640,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:00:00",
+        time_window_end="2026-02-28T04:25:00",
+        passenger_count=1,
+        priority=Priority.URGENT,
+        pickup_label="Tigard",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=2,
+        notes="Southwest 5:45 AM — earliest departure, farthest pickup",
+    ),
+    Ride(
+        id="A008",
+        pickup_lat=45.5152,
+        pickup_lng=-122.6784,
+        dropoff_lat=45.5898,
+        dropoff_lng=-122.5951,
+        time_window_start="2026-02-28T04:50:00",
+        time_window_end="2026-02-28T05:10:00",
+        passenger_count=6,
+        priority=Priority.HIGH,
+        pickup_label="Downtown Portland",
+        dropoff_label="PDX Airport",
+        service_type=ServiceType.AIRPORT_DEPARTURE,
+        luggage_count=8,
+        notes="Corporate group — 6 pax, need large vehicle",
+    ),
+]
+
+DOWNTOWN_MIX_VEHICLES: list[Vehicle] = [
     Vehicle(
         id="V001",
         name="Sedan Alpha",
@@ -146,6 +297,8 @@ SEED_VEHICLES: list[Vehicle] = [
         current_lng=-122.6784,
         capacity=4,
         status=VehicleStatus.AVAILABLE,
+        vehicle_type=VehicleType.SEDAN,
+        luggage_capacity=3,
     ),
     Vehicle(
         id="V002",
@@ -154,6 +307,8 @@ SEED_VEHICLES: list[Vehicle] = [
         current_lng=-122.6400,
         capacity=6,
         status=VehicleStatus.AVAILABLE,
+        vehicle_type=VehicleType.SUV,
+        luggage_capacity=6,
     ),
     Vehicle(
         id="V003",
@@ -162,5 +317,60 @@ SEED_VEHICLES: list[Vehicle] = [
         current_lng=-122.7000,
         capacity=8,
         status=VehicleStatus.AVAILABLE,
+        vehicle_type=VehicleType.VAN,
+        luggage_capacity=10,
     ),
 ]
+
+AIRPORT_RUSH_VEHICLES: list[Vehicle] = [
+    Vehicle(
+        id="V001",
+        name="Sedan Alpha",
+        current_lat=45.5152,
+        current_lng=-122.6784,
+        capacity=4,
+        status=VehicleStatus.AVAILABLE,
+        vehicle_type=VehicleType.SEDAN,
+        luggage_capacity=3,
+    ),
+    Vehicle(
+        id="V002",
+        name="SUV Bravo",
+        current_lat=45.4900,
+        current_lng=-122.6400,
+        capacity=6,
+        status=VehicleStatus.AVAILABLE,
+        vehicle_type=VehicleType.SUV,
+        luggage_capacity=6,
+    ),
+    Vehicle(
+        id="V003",
+        name="Sprinter Delta",
+        current_lat=45.5300,
+        current_lng=-122.6900,
+        capacity=12,
+        status=VehicleStatus.AVAILABLE,
+        vehicle_type=VehicleType.SPRINTER,
+        luggage_capacity=15,
+    ),
+]
+
+# Scenario registry
+SCENARIOS: dict[str, dict] = {
+    "downtown_mix": {
+        "label": "Downtown Mix",
+        "description": "10 rides across Portland, mixed priorities and service types",
+        "rides": DOWNTOWN_MIX_RIDES,
+        "vehicles": DOWNTOWN_MIX_VEHICLES,
+    },
+    "airport_rush": {
+        "label": "Airport Rush",
+        "description": "8 early-morning rides all heading to PDX Airport",
+        "rides": AIRPORT_RUSH_RIDES,
+        "vehicles": AIRPORT_RUSH_VEHICLES,
+    },
+}
+
+# Backward compat
+SEED_RIDES = DOWNTOWN_MIX_RIDES
+SEED_VEHICLES = DOWNTOWN_MIX_VEHICLES

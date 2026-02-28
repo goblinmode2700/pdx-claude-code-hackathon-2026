@@ -47,8 +47,9 @@ export function RidePanel({ rides, assignments }: RidePanelProps) {
                   <span className="text-red-600 font-medium">D</span>{" "}
                   {ride.dropoff_label || `${ride.dropoff_lat.toFixed(3)}, ${ride.dropoff_lng.toFixed(3)}`}
                 </div>
-                <div className="flex gap-3 pt-0.5 text-gray-400">
+                <div className="flex gap-3 pt-0.5 text-gray-400 flex-wrap">
                   <span>{ride.passenger_count} pax</span>
+                  {ride.luggage_count > 0 && <span>{ride.luggage_count} bags</span>}
                   <span>
                     {new Date(ride.time_window_start).toLocaleTimeString([], {
                       hour: "2-digit",

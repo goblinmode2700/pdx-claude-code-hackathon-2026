@@ -9,11 +9,26 @@ class Priority(str, Enum):
     URGENT = "urgent"
 
 
+class ServiceType(str, Enum):
+    TRANSFER = "transfer"
+    AIRPORT_ARRIVAL = "airport_arrival"
+    AIRPORT_DEPARTURE = "airport_departure"
+    HOURLY = "hourly"
+    POINT_TO_POINT = "point_to_point"
+
+
 class VehicleStatus(str, Enum):
     AVAILABLE = "available"
     EN_ROUTE = "en_route"
     ON_TRIP = "on_trip"
     OFF_DUTY = "off_duty"
+
+
+class VehicleType(str, Enum):
+    SEDAN = "sedan"
+    SUV = "suv"
+    VAN = "van"
+    SPRINTER = "sprinter"
 
 
 class Ride(BaseModel):
@@ -28,6 +43,9 @@ class Ride(BaseModel):
     priority: Priority
     pickup_label: str = ""
     dropoff_label: str = ""
+    service_type: ServiceType = ServiceType.TRANSFER
+    luggage_count: int = 0
+    notes: str = ""
 
 
 class Vehicle(BaseModel):
@@ -37,6 +55,8 @@ class Vehicle(BaseModel):
     current_lng: float
     capacity: int
     status: VehicleStatus
+    vehicle_type: VehicleType = VehicleType.SEDAN
+    luggage_capacity: int = 4
 
 
 class RouteAssignment(BaseModel):
@@ -59,3 +79,7 @@ class OptimizeRequest(BaseModel):
 class OptimizeResponse(BaseModel):
     result: OptimizationResult
     prompt_used: str  # show the prompt for transparency
+    naive_miles: float = 0.0
+    optimized_miles: float = 0.0
+    naive_violations: int = 0
+    optimized_violations: int = 0

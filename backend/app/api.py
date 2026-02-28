@@ -3,11 +3,11 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .models import OptimizeRequest, OptimizeResponse, Ride, Vehicle
-from .seed import SEED_RIDES, SEED_VEHICLES
+from .models import OptimizeRequest, OptimizeResponse, OptimizationResult
+from .seed import SCENARIOS
 from .optimizer import optimize
 
 app = FastAPI(title="Fleet Route Optimizer", version="0.1.0")
@@ -21,20 +21,41 @@ app.add_middleware(
 )
 
 
-@app.get("/seed")
-async def get_seed() -> dict:
-    """Return sample scenario data."""
+@app.get("/scenarios")
+async def list_scenarios() -> dict:
+    """List available scenarios."""
     return {
-        "rides": [r.model_dump() for r in SEED_RIDES],
-        "vehicles": [v.model_dump() for v in SEED_VEHICLES],
+        "scenarios": {
+            key: {"label": s["label"], "description": s["description"]}
+            for key, s in SCENARIOS.items()
+        }
+    }
+
+
+@app.get("/seed")
+async def get_seed(scenario: str = "downtown_mix") -> dict:
+    """Return scenario data. Defaults to downtown_mix."""
+    if scenario not in SCENARIOS:
+        raise HTTPException(status_code=400, detail=f"Unknown scenario: {scenario}. Options: {list(SCENARIOS.keys())}")
+    s = SCENARIOS[scenario]
+    return {
+        "rides": [r.model_dump() for r in s["rides"]],
+        "vehicles": [v.model_dump() for v in s["vehicles"]],
     }
 
 
 @app.post("/optimize")
 async def optimize_routes(request: OptimizeRequest) -> OptimizeResponse:
-    """Accept rides + vehicles, return assignments + reasoning."""
-    result, prompt = await optimize(request.rides, request.vehicles)
-    return OptimizeResponse(result=result, prompt_used=prompt)
+    """Accept rides + vehicles, return assignments + reasoning + mile comparison."""
+    data = await optimize(request.rides, request.vehicles)
+    return OptimizeResponse(
+        result=data["result"],
+        prompt_used=data["prompt"],
+        naive_miles=round(data["naive_miles"], 1),
+        optimized_miles=round(data["optimized_miles"], 1),
+        naive_violations=data["naive_violations"],
+        optimized_violations=data["optimized_violations"],
+    )
 
 
 @app.get("/health")

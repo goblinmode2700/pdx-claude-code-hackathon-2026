@@ -3,9 +3,20 @@ import type { OptimizationResult } from "../types";
 interface ReasoningPanelProps {
   result: OptimizationResult | null;
   loading: boolean;
+  naiveMiles: number | null;
+  optimizedMiles: number | null;
+  naiveViolations: number | null;
+  optimizedViolations: number | null;
 }
 
-export function ReasoningPanel({ result, loading }: ReasoningPanelProps) {
+export function ReasoningPanel({
+  result,
+  loading,
+  naiveMiles,
+  optimizedMiles,
+  naiveViolations,
+  optimizedViolations,
+}: ReasoningPanelProps) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
@@ -23,11 +34,61 @@ export function ReasoningPanel({ result, loading }: ReasoningPanelProps) {
     );
   }
 
+  const showComparison = naiveMiles != null && optimizedMiles != null;
+  const milesSaved = showComparison ? naiveMiles! - optimizedMiles! : null;
+  const pctSaved = showComparison && naiveMiles! > 0
+    ? Math.round((milesSaved! / naiveMiles!) * 100)
+    : null;
+
   return (
     <div className="flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-180px)]">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+        Naive vs AI Optimized
+      </h2>
+
+      {/* Comparison card */}
+      {showComparison && (
+        <div className="bg-gradient-to-r from-red-50 to-green-50 border rounded-lg p-3">
+          <div className="grid grid-cols-2 gap-3 text-center">
+            <div>
+              <div className="text-[10px] uppercase font-semibold text-red-500 tracking-wide">Round-Robin</div>
+              <div className="text-xl font-bold text-red-600">{naiveMiles} mi</div>
+              {naiveViolations != null && naiveViolations > 0 && (
+                <div className="text-[10px] text-red-500 mt-0.5">
+                  {naiveViolations} constraint violation{naiveViolations !== 1 ? "s" : ""}
+                </div>
+              )}
+              {naiveViolations === 0 && (
+                <div className="text-[10px] text-gray-400 mt-0.5">0 violations</div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-semibold text-green-600 tracking-wide">AI Optimized</div>
+              <div className="text-xl font-bold text-green-700">{optimizedMiles} mi</div>
+              {optimizedViolations != null && (
+                <div className="text-[10px] text-green-600 mt-0.5">
+                  {optimizedViolations === 0 ? "0 violations" : `${optimizedViolations} violation${optimizedViolations !== 1 ? "s" : ""}`}
+                </div>
+              )}
+            </div>
+          </div>
+          {milesSaved != null && milesSaved > 0 && (
+            <div className="text-center mt-2 text-sm font-semibold text-green-700 bg-green-100 rounded-md py-1">
+              {milesSaved.toFixed(1)} miles saved ({pctSaved}% more efficient)
+            </div>
+          )}
+          {milesSaved != null && milesSaved <= 0 && naiveViolations != null && naiveViolations > optimizedViolations! && (
+            <div className="text-center mt-2 text-sm font-semibold text-green-700 bg-green-100 rounded-md py-1">
+              {naiveViolations - optimizedViolations!} fewer constraint violations
+            </div>
+          )}
+        </div>
+      )}
+
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
         Claude's Strategy
       </h2>
+
       <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-900">
         {result.overall_strategy}
       </div>
