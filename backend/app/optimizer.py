@@ -8,6 +8,11 @@ from .geo import haversine_miles
 from .directions import get_route_polyline, get_distance_matrix
 
 
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+THINKING_BUDGET = 4096
+MAX_TOKENS = 16000
+
+
 def compute_route_miles(assignment: RouteAssignment, rides: list[Ride], vehicles: list[Vehicle]) -> float:
     """Compute total haversine miles for a single vehicle's route."""
     ride_map = {r.id: r for r in rides}
@@ -192,7 +197,7 @@ HARD CONSTRAINTS (must not violate):
 - Vehicle must be available (status=available)
 
 OPTIMIZATION RULES (in priority order):
-1. RESERVATION LOGIC (critical — read carefully):
+1. RESERVATION LOGIC (critical):
    Before assigning ANY rides, scan the full batch and identify rides that REQUIRE a specific vehicle's capability (e.g., high passenger count that only one vehicle can handle, heavy luggage that only one vehicle fits). RESERVE those vehicles for those rides, even if the vehicle is geographically closer to a simpler ride. Do NOT waste a specialized vehicle on a generic ride when a specialized ride needs it later. In your reasoning, explicitly call out reservation decisions: "Reserved [vehicle] for [ride] because it is the only vehicle that can handle [constraint]."
 
 2. PRIORITY: Assign URGENT and HIGH priority rides first — they get first pick of vehicles.
@@ -205,35 +210,36 @@ OPTIMIZATION RULES (in priority order):
 
 6. Use the real drive times provided (if available) instead of straight-line distance estimates.
 
-You MUST respond in exactly this two-part format:
-
-PART 1 — ANALYSIS (plain text, think out loud):
-Write your step-by-step reasoning as plain text paragraphs. Cover:
-- Which rides require specialized vehicles and why (reservation decisions)
-- How you're clustering rides geographically
-- Priority ordering decisions
-- Any trade-offs you're making
-
-PART 2 — JSON (after the text, on its own):
-Output the marker ===JSON=== on its own line, then valid JSON:
-===JSON===
+Respond with ONLY valid JSON in this exact format:
 {{
   "assignments": [
     {{
       "vehicle_id": "V001",
       "ride_ids_in_order": ["R001", "R005"],
-      "reasoning": "Brief reasoning for this vehicle's assignment"
+      "reasoning": "Explain grouping AND any reservation decisions."
     }}
   ],
   "overall_strategy": "2-3 sentence summary including which vehicles were reserved and why",
   "unassigned_rides": ["R999"]
 }}
 
-Think step by step: first identify which rides REQUIRE specific vehicles, reserve those, then optimize the remaining assignments by proximity and time. Every ride should be assigned if possible."""
+Every ride should be assigned if possible."""
+
+
+def _parse_json_response(raw: str) -> OptimizationResult:
+    """Parse Claude's JSON response, handling code fences and whitespace."""
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+    parsed = json.loads(cleaned)
+    return OptimizationResult(**parsed)
 
 
 async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
-    """Streaming version of optimize. Yields SSE events as Claude generates tokens."""
+    """Streaming version with extended thinking. Yields SSE events."""
     import asyncio as _asyncio
 
     # Start drive times + naive baseline in parallel
@@ -245,54 +251,42 @@ async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
     drive_times = await drive_times_task
     prompt = build_prompt(rides, vehicles, drive_times)
 
-    # Stream Claude's response
+    # Stream Claude's response with extended thinking
     client = anthropic.AsyncAnthropic()
-    full_text = ""
-    hit_json_marker = False
+    json_text = ""
+    in_text_block = False
 
     async with client.messages.stream(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
+        model=CLAUDE_MODEL,
+        max_tokens=MAX_TOKENS,
+        thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
-        async for text in stream.text_stream:
-            full_text += text
-            # Only stream tokens that are part of the reasoning (before ===JSON===)
-            if not hit_json_marker:
-                if "===JSON===" in full_text:
-                    hit_json_marker = True
-                    # Send any remaining reasoning text before the marker
-                    pre_marker = text.split("===JSON===")[0]
-                    if pre_marker.strip():
-                        yield f"data: {json.dumps({'type': 'token', 'text': pre_marker})}\n\n"
-                else:
-                    yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+        async for event in stream:
+            if event.type == "content_block_start":
+                if hasattr(event.content_block, "type") and event.content_block.type == "text":
+                    in_text_block = True
+            elif event.type == "content_block_stop":
+                in_text_block = False if in_text_block else in_text_block
+            elif event.type == "content_block_delta":
+                if event.delta.type == "thinking_delta":
+                    # Stream thinking tokens as readable reasoning
+                    yield f"data: {json.dumps({'type': 'token', 'text': event.delta.thinking})}\n\n"
+                elif event.delta.type == "text_delta":
+                    # Buffer text (JSON) silently
+                    json_text += event.delta.text
 
-    # Parse the JSON part (after ===JSON===)
+    # Parse the JSON response
     try:
-        if "===JSON===" in full_text:
-            json_part = full_text.split("===JSON===", 1)[1].strip()
-        else:
-            # Fallback: try to find JSON in the full text
-            json_part = full_text.strip()
-
-        # Strip markdown code fences if present
-        if json_part.startswith("```"):
-            json_part = json_part.split("\n", 1)[1]
-            if json_part.endswith("```"):
-                json_part = json_part[:-3]
-            json_part = json_part.strip()
-
-        parsed = json.loads(json_part)
-        result = OptimizationResult(**parsed)
+        result = _parse_json_response(json_text)
     except (json.JSONDecodeError, Exception) as e:
-        yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to parse Claude response: {str(e)}'})}\n\n"
+        yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to parse response: {str(e)}'})}\n\n"
         return
 
     # Signal that we're now computing road routes
     yield f"data: {json.dumps({'type': 'status', 'message': 'Computing road routes...'})}\n\n"
 
-    # Enrich with polylines (both optimized and naive) — fallback to haversine on failure
+    # Enrich with polylines — fallback to haversine on failure
     try:
         enriched_assignments, optimized_road_miles = await enrich_with_polylines(
             result.assignments, rides, vehicles
@@ -323,7 +317,7 @@ async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
 
 
 async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
-    """Call Claude to optimize routes. Returns full comparison data."""
+    """Call Claude with extended thinking to optimize routes. Returns full comparison data."""
     # Get real drive times for the prompt (async, non-blocking)
     drive_times = await _build_drive_time_context(rides, vehicles)
 
@@ -342,28 +336,20 @@ async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
 
     client = anthropic.AsyncAnthropic()
     message = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
+        model=CLAUDE_MODEL,
+        max_tokens=MAX_TOKENS,
+        thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = message.content[0].text
+    # With extended thinking: content[0] is thinking block, content[1] is text block
+    json_text = ""
+    for block in message.content:
+        if block.type == "text":
+            json_text = block.text
+            break
 
-    # Extract JSON part (after ===JSON=== marker)
-    if "===JSON===" in raw:
-        json_part = raw.split("===JSON===", 1)[1].strip()
-    else:
-        json_part = raw.strip()
-
-    # Strip markdown code fences if present
-    if json_part.startswith("```"):
-        json_part = json_part.split("\n", 1)[1]
-        if json_part.endswith("```"):
-            json_part = json_part[:-3]
-        json_part = json_part.strip()
-
-    parsed = json.loads(json_part)
-    result = OptimizationResult(**parsed)
+    result = _parse_json_response(json_text)
 
     # Enrich with real road polylines + distances
     try:
