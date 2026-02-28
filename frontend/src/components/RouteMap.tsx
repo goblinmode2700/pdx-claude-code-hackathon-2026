@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect } from "react";
@@ -16,14 +16,14 @@ function createIcon(color: string, shape: "circle" | "square" | "car", pulsing =
   const pulseStyle = pulsing ? 'style="animation: pulse 1.2s ease-in-out infinite"' : '';
   const svg =
     shape === "circle"
-      ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/></svg>`
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="${color}" stroke="white" stroke-width="2.5" ${pulseStyle}/><text x="12" y="16" font-size="10" fill="white" text-anchor="middle" font-weight="bold" font-family="sans-serif">P</text></svg>`
       : shape === "square"
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="2" y="2" width="16" height="16" rx="3" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/></svg>`
-        : `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="12" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/><text x="14" y="19" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif">🚐</text></svg>`;
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="2" y="2" width="16" height="16" rx="3" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/><text x="10" y="14" font-size="9" fill="white" text-anchor="middle" font-weight="bold" font-family="sans-serif">D</text></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2.5" ${pulseStyle}/><text x="16" y="21" font-size="15" fill="white" text-anchor="middle" font-family="sans-serif">&#x1F690;</text></svg>`;
   return L.divIcon({
     html: svg,
-    iconSize: shape === "car" ? [28, 28] : [20, 20],
-    iconAnchor: shape === "car" ? [14, 14] : [10, 10],
+    iconSize: shape === "car" ? [32, 32] : shape === "circle" ? [24, 24] : [20, 20],
+    iconAnchor: shape === "car" ? [16, 16] : shape === "circle" ? [12, 12] : [10, 10],
     className: "",
   });
 }
@@ -47,34 +47,51 @@ function FitBounds({ rides, vehicles }: { rides: Ride[]; vehicles: Vehicle[] }) 
   return null;
 }
 
+interface RouteLine {
+  vehicleId: string;
+  vehicleName: string;
+  color: string;
+  points: [number, number][];
+  rideIds: string[];
+  miles: number;
+}
+
 function buildRouteLines(
   assignments: RouteAssignment[],
   rides: Ride[],
   vehicles: Vehicle[],
   colorOverride?: string,
-) {
+): RouteLine[] {
   const rideMap = new Map(rides.map((r) => [r.id, r]));
   return assignments.map((a) => {
     const vehicle = vehicles.find((v) => v.id === a.vehicle_id);
     const color = colorOverride || VEHICLE_COLORS[a.vehicle_id] || "#6b7280";
 
+    let points: [number, number][];
     if (a.polyline && a.polyline.length > 0) {
-      const points = a.polyline.map((p) => [p[0], p[1]] as [number, number]);
-      return { vehicleId: a.vehicle_id, color, points };
-    }
-
-    const points: [number, number][] = [];
-    if (vehicle) {
-      points.push([vehicle.current_lat, vehicle.current_lng]);
-    }
-    for (const rideId of a.ride_ids_in_order) {
-      const ride = rideMap.get(rideId);
-      if (ride) {
-        points.push([ride.pickup_lat, ride.pickup_lng]);
-        points.push([ride.dropoff_lat, ride.dropoff_lng]);
+      points = a.polyline.map((p) => [p[0], p[1]] as [number, number]);
+    } else {
+      points = [];
+      if (vehicle) {
+        points.push([vehicle.current_lat, vehicle.current_lng]);
+      }
+      for (const rideId of a.ride_ids_in_order) {
+        const ride = rideMap.get(rideId);
+        if (ride) {
+          points.push([ride.pickup_lat, ride.pickup_lng]);
+          points.push([ride.dropoff_lat, ride.dropoff_lng]);
+        }
       }
     }
-    return { vehicleId: a.vehicle_id, color, points };
+
+    return {
+      vehicleId: a.vehicle_id,
+      vehicleName: vehicle?.name ?? a.vehicle_id,
+      color,
+      points,
+      rideIds: a.ride_ids_in_order,
+      miles: a.route_miles,
+    };
   });
 }
 
@@ -89,6 +106,7 @@ interface RouteMapProps {
 export function RouteMap({ rides, vehicles, assignments, naiveAssignments = [], loading }: RouteMapProps) {
   const routeLines = buildRouteLines(assignments, rides, vehicles);
   const naiveLines = buildRouteLines(naiveAssignments, rides, vehicles, "#9ca3af");
+  const hasRoutes = routeLines.length > 0;
 
   return (
     <MapContainer center={PORTLAND_CENTER} zoom={12} className="h-full w-full rounded-lg">
@@ -109,7 +127,11 @@ export function RouteMap({ rides, vehicles, assignments, naiveAssignments = [], 
             opacity: 0.5,
             dashArray: "8 6",
           }}
-        />
+        >
+          <Tooltip sticky>
+            <span style={{ fontSize: 11 }}>Naive: {rl.vehicleName}</span>
+          </Tooltip>
+        </Polyline>
       ))}
 
       {/* Optimized route lines (solid colored, on top) */}
@@ -122,10 +144,19 @@ export function RouteMap({ rides, vehicles, assignments, naiveAssignments = [], 
             weight: 4,
             opacity: 0.85,
           }}
-        />
+        >
+          <Tooltip sticky>
+            <div style={{ fontSize: 11, lineHeight: 1.4 }}>
+              <strong>{rl.vehicleName}</strong>
+              <br />
+              {rl.rideIds.join(" → ")}
+              {rl.miles > 0 && <><br />{rl.miles} mi</>}
+            </div>
+          </Tooltip>
+        </Polyline>
       ))}
 
-      {/* Pickup markers (circles) */}
+      {/* Pickup markers (circles with P) */}
       {rides.map((r) => (
         <Marker
           key={`pickup-${r.id}`}
@@ -137,12 +168,12 @@ export function RouteMap({ rides, vehicles, assignments, naiveAssignments = [], 
             <br />
             {r.pickup_label}
             <br />
-            {r.passenger_count} pax | {r.priority}
+            {r.passenger_count} passengers | {r.priority}
           </Popup>
         </Marker>
       ))}
 
-      {/* Dropoff markers (squares) */}
+      {/* Dropoff markers (squares with D) */}
       {rides.map((r) => (
         <Marker
           key={`dropoff-${r.id}`}
@@ -167,10 +198,59 @@ export function RouteMap({ rides, vehicles, assignments, naiveAssignments = [], 
           <Popup>
             <strong>{v.name}</strong> ({v.id})
             <br />
-            Cap: {v.capacity} | {v.status}
+            Capacity: {v.capacity} | {v.vehicle_type}
           </Popup>
         </Marker>
       ))}
+
+      {/* Vehicle legend (bottom-left) */}
+      {vehicles.length > 0 && !loading && (
+        <div className="leaflet-bottom leaflet-left" style={{ pointerEvents: "none" }}>
+          <div
+            className="leaflet-control"
+            style={{
+              pointerEvents: "auto",
+              background: "white",
+              borderRadius: 8,
+              padding: "6px 10px",
+              fontSize: 11,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+            }}
+          >
+            {vehicles.map((v) => (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    backgroundColor: VEHICLE_COLORS[v.id] || "#6b7280",
+                    display: "inline-block",
+                    flexShrink: 0,
+                  }}
+                />
+                <span>
+                  <strong>{v.id}</strong> {v.name}
+                </span>
+              </div>
+            ))}
+            {hasRoutes && (
+              <>
+                <div style={{ borderTop: "1px solid #e5e7eb", margin: "2px 0" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#22c55e" }}>
+                  <span style={{ fontSize: 13 }}>&#9679;</span> Pickup
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#ef4444" }}>
+                  <span style={{ fontSize: 11 }}>&#9632;</span> Dropoff
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </MapContainer>
   );
 }
