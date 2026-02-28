@@ -47,9 +47,14 @@ export function RidePanel({ rides, assignments }: RidePanelProps) {
                   <span className="text-red-600 font-medium">D</span>{" "}
                   {ride.dropoff_label || `${ride.dropoff_lat.toFixed(3)}, ${ride.dropoff_lng.toFixed(3)}`}
                 </div>
-                <div className="flex gap-3 pt-0.5 text-gray-400 flex-wrap">
+                <div className="flex gap-2 pt-0.5 text-gray-400 flex-wrap items-center">
                   <span>{ride.passenger_count} pax</span>
                   {ride.luggage_count > 0 && <span>{ride.luggage_count} bags</span>}
+                  {ride.service_type !== "transfer" && (
+                    <span className="text-[9px] bg-gray-100 text-gray-500 px-1 py-px rounded">
+                      {ride.service_type.replace(/_/g, " ")}
+                    </span>
+                  )}
                   <span>
                     {new Date(ride.time_window_start).toLocaleTimeString([], {
                       hour: "2-digit",
@@ -63,6 +68,9 @@ export function RidePanel({ rides, assignments }: RidePanelProps) {
                   </span>
                 </div>
               </div>
+              {ride.notes && (
+                <div className="text-[10px] text-amber-600 mt-1 italic">{ride.notes}</div>
+              )}
               {vehicleId && (
                 <div
                   className="mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-white"

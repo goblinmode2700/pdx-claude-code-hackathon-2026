@@ -10,6 +10,8 @@ export const VEHICLE_COLORS: Record<string, string> = {
   V001: "#6366f1", // indigo
   V002: "#f59e0b", // amber
   V003: "#10b981", // emerald
+  V004: "#8b5cf6", // violet
+  V005: "#ec4899", // pink
 };
 
 export const PRIORITY_COLORS: Record<string, string> = {
