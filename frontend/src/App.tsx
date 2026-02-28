@@ -120,6 +120,7 @@ function App() {
             rides={rides}
             vehicles={vehicles}
             assignments={optimizeResponse?.result.assignments ?? []}
+            loading={loading}
           />
         </main>
 

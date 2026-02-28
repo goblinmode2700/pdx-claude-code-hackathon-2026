@@ -33,6 +33,8 @@ export interface RouteAssignment {
   vehicle_id: string;
   ride_ids_in_order: string[];
   reasoning: string;
+  polyline: number[][];  // [[lat, lng], ...] from Google Directions
+  route_miles: number;
 }
 
 export interface OptimizationResult {

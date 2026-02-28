@@ -63,6 +63,8 @@ class RouteAssignment(BaseModel):
     vehicle_id: str
     ride_ids_in_order: list[str]
     reasoning: str
+    polyline: list[list[float]] = []  # [[lat, lng], ...] for map rendering
+    route_miles: float = 0.0
 
 
 class OptimizationResult(BaseModel):

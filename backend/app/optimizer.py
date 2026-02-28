@@ -1,22 +1,15 @@
 """Claude-powered route optimizer."""
 
 import json
-import math
+import asyncio
 import anthropic
 from .models import Ride, Vehicle, OptimizationResult, RouteAssignment
-
-
-def haversine_miles(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Calculate distance in miles between two lat/lng points."""
-    R = 3959  # Earth radius in miles
-    dlat = math.radians(lat2 - lat1)
-    dlng = math.radians(lng2 - lng1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
-    return R * 2 * math.asin(math.sqrt(a))
+from .geo import haversine_miles
+from .directions import get_route_polyline, get_distance_matrix
 
 
 def compute_route_miles(assignment: RouteAssignment, rides: list[Ride], vehicles: list[Vehicle]) -> float:
-    """Compute total miles for a single vehicle's route."""
+    """Compute total haversine miles for a single vehicle's route."""
     ride_map = {r.id: r for r in rides}
     vehicle = next((v for v in vehicles if v.id == assignment.vehicle_id), None)
     if not vehicle:
@@ -29,13 +22,47 @@ def compute_route_miles(assignment: RouteAssignment, rides: list[Ride], vehicles
         ride = ride_map.get(ride_id)
         if not ride:
             continue
-        # Drive to pickup
         total += haversine_miles(cur_lat, cur_lng, ride.pickup_lat, ride.pickup_lng)
-        # Drive to dropoff
         total += haversine_miles(ride.pickup_lat, ride.pickup_lng, ride.dropoff_lat, ride.dropoff_lng)
         cur_lat, cur_lng = ride.dropoff_lat, ride.dropoff_lng
 
     return total
+
+
+def _build_waypoints(assignment: RouteAssignment, rides: list[Ride], vehicles: list[Vehicle]) -> list[tuple[float, float]]:
+    """Build ordered waypoints for a vehicle's route: vehicle pos → pickup1 → dropoff1 → pickup2 → dropoff2 ..."""
+    ride_map = {r.id: r for r in rides}
+    vehicle = next((v for v in vehicles if v.id == assignment.vehicle_id), None)
+    if not vehicle:
+        return []
+
+    waypoints: list[tuple[float, float]] = [(vehicle.current_lat, vehicle.current_lng)]
+    for ride_id in assignment.ride_ids_in_order:
+        ride = ride_map.get(ride_id)
+        if ride:
+            waypoints.append((ride.pickup_lat, ride.pickup_lng))
+            waypoints.append((ride.dropoff_lat, ride.dropoff_lng))
+    return waypoints
+
+
+async def enrich_with_polylines(
+    assignments: list[RouteAssignment], rides: list[Ride], vehicles: list[Vehicle]
+) -> tuple[list[RouteAssignment], float]:
+    """Add real road polylines + distances to assignments. Returns (enriched_assignments, total_road_miles)."""
+    async def enrich_one(a: RouteAssignment) -> RouteAssignment:
+        waypoints = _build_waypoints(a, rides, vehicles)
+        polyline, miles = await get_route_polyline(waypoints)
+        return RouteAssignment(
+            vehicle_id=a.vehicle_id,
+            ride_ids_in_order=a.ride_ids_in_order,
+            reasoning=a.reasoning,
+            polyline=polyline,
+            route_miles=round(miles, 1),
+        )
+
+    enriched = await asyncio.gather(*[enrich_one(a) for a in assignments])
+    total_road_miles = sum(a.route_miles for a in enriched)
+    return list(enriched), total_road_miles
 
 
 def naive_assign(rides: list[Ride], vehicles: list[Vehicle]) -> tuple[list[RouteAssignment], float]:
@@ -44,7 +71,6 @@ def naive_assign(rides: list[Ride], vehicles: list[Vehicle]) -> tuple[list[Route
     available = [v for v in vehicles if v.status.value == "available"]
     vehicle_loads: dict[str, list[str]] = {v.id: [] for v in available}
 
-    # Simple round-robin: deal rides to vehicles like cards
     for i, ride in enumerate(sorted_rides):
         vid = available[i % len(available)].id
         vehicle_loads[vid].append(ride.id)
@@ -82,7 +108,6 @@ def count_constraint_violations(assignments: list[RouteAssignment], rides: list[
             if r.luggage_count > v.luggage_capacity:
                 violations["luggage"] += 1
 
-        # Check if urgent/high rides come before low/medium
         priorities = [ride_map[rid].priority.value for rid in a.ride_ids_in_order if rid in ride_map]
         priority_rank = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
         for i in range(len(priorities) - 1):
@@ -92,7 +117,41 @@ def count_constraint_violations(assignments: list[RouteAssignment], rides: list[
     return violations
 
 
-def build_prompt(rides: list[Ride], vehicles: list[Vehicle]) -> str:
+async def _build_drive_time_context(rides: list[Ride], vehicles: list[Vehicle]) -> str | None:
+    """Get real drive times between key points to enrich the prompt."""
+    # Gather all unique points: vehicle positions + pickup/dropoff locations
+    points: list[tuple[float, float]] = []
+    point_labels: list[str] = []
+
+    for v in vehicles:
+        points.append((v.current_lat, v.current_lng))
+        point_labels.append(f"{v.id} (current)")
+
+    for r in rides:
+        points.append((r.pickup_lat, r.pickup_lng))
+        point_labels.append(f"{r.id} pickup")
+
+    # Only use vehicle positions as origins, ride pickups as destinations
+    # to keep the matrix manageable
+    vehicle_points = [(v.current_lat, v.current_lng) for v in vehicles]
+    pickup_points = [(r.pickup_lat, r.pickup_lng) for r in rides]
+
+    matrix = await get_distance_matrix(vehicle_points, pickup_points)
+    if not matrix:
+        return None
+
+    lines = ["REAL DRIVE TIMES (vehicle → ride pickup):"]
+    for i, v in enumerate(vehicles):
+        for j, r in enumerate(rides):
+            d = matrix[i][j]
+            lines.append(
+                f"  {v.id} → {r.id} pickup: {d['distance_miles']:.1f} mi, {d['duration_minutes']:.0f} min"
+            )
+
+    return "\n".join(lines)
+
+
+def build_prompt(rides: list[Ride], vehicles: list[Vehicle], drive_times: str | None = None) -> str:
     rides_desc = []
     for r in rides:
         parts = [
@@ -113,6 +172,10 @@ def build_prompt(rides: list[Ride], vehicles: list[Vehicle]) -> str:
             f"pax_capacity={v.capacity}, luggage_capacity={v.luggage_capacity}, status={v.status.value}"
         )
 
+    drive_times_section = ""
+    if drive_times:
+        drive_times_section = f"\n{drive_times}\n"
+
     return f"""You are a fleet dispatch optimizer for a Portland, OR ground transportation company.
 
 Given the following ride requests and available vehicles, create optimal route assignments.
@@ -122,7 +185,7 @@ RIDES:
 
 VEHICLES:
 {chr(10).join(vehicles_desc)}
-
+{drive_times_section}
 CONSTRAINTS:
 - Each vehicle cannot exceed its passenger capacity for any single ride
 - Consider luggage capacity — vehicles with limited luggage space should not be assigned heavy-luggage rides
@@ -131,6 +194,7 @@ CONSTRAINTS:
 - A vehicle can handle multiple rides if sequenced efficiently (i.e., dropoff of one ride is near pickup of next)
 - Consider geographic clustering — assign nearby rides to the same vehicle
 - For airport departure rides, ensure pickup time allows enough travel time to reach the airport before the flight
+- Use the real drive times provided (if available) instead of straight-line distance estimates
 
 Respond with ONLY valid JSON in this exact format:
 {{
@@ -150,11 +214,17 @@ Think carefully about geographic proximity, time windows, capacity, and luggage.
 
 async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
     """Call Claude to optimize routes. Returns full comparison data."""
-    prompt = build_prompt(rides, vehicles)
+    # Get real drive times for the prompt (async, non-blocking)
+    drive_times = await _build_drive_time_context(rides, vehicles)
 
-    # Compute naive baseline
-    naive_assignments, naive_miles = naive_assign(rides, vehicles)
+    prompt = build_prompt(rides, vehicles, drive_times)
+
+    # Compute naive baseline (haversine)
+    naive_assignments, naive_miles_haversine = naive_assign(rides, vehicles)
     naive_violations = count_constraint_violations(naive_assignments, rides, vehicles)
+
+    # Enrich naive with real road distances
+    naive_enriched, naive_road_miles = await enrich_with_polylines(naive_assignments, rides, vehicles)
 
     client = anthropic.AsyncAnthropic()
     message = await client.messages.create(
@@ -176,15 +246,19 @@ async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
     parsed = json.loads(cleaned)
     result = OptimizationResult(**parsed)
 
-    # Compute optimized miles and violations
-    optimized_miles = sum(compute_route_miles(a, rides, vehicles) for a in result.assignments)
+    # Enrich with real road polylines + distances
+    enriched_assignments, optimized_road_miles = await enrich_with_polylines(
+        result.assignments, rides, vehicles
+    )
+    result.assignments = enriched_assignments
+
     optimized_violations = count_constraint_violations(result.assignments, rides, vehicles)
 
     return {
         "result": result,
         "prompt": prompt,
-        "naive_miles": naive_miles,
-        "optimized_miles": optimized_miles,
+        "naive_miles": round(naive_road_miles, 1),
+        "optimized_miles": round(optimized_road_miles, 1),
         "naive_violations": sum(naive_violations.values()),
         "optimized_violations": sum(optimized_violations.values()),
     }

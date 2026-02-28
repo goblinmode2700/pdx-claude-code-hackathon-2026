@@ -1,4 +1,5 @@
-from app.optimizer import build_prompt, naive_assign, haversine_miles
+from app.optimizer import build_prompt, naive_assign
+from app.geo import haversine_miles
 from app.seed import SEED_RIDES, SEED_VEHICLES, AIRPORT_RUSH_RIDES, AIRPORT_RUSH_VEHICLES, SCENARIOS
 
 

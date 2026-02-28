@@ -12,13 +12,14 @@ import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 
 L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl });
 
-function createIcon(color: string, shape: "circle" | "square" | "car") {
+function createIcon(color: string, shape: "circle" | "square" | "car", pulsing = false) {
+  const pulseStyle = pulsing ? 'style="animation: pulse 1.2s ease-in-out infinite"' : '';
   const svg =
     shape === "circle"
-      ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="${color}" stroke="white" stroke-width="2"/></svg>`
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/></svg>`
       : shape === "square"
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="2" y="2" width="16" height="16" rx="3" fill="${color}" stroke="white" stroke-width="2"/></svg>`
-        : `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="12" fill="${color}" stroke="white" stroke-width="2"/><text x="14" y="19" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif">🚐</text></svg>`;
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="2" y="2" width="16" height="16" rx="3" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="12" fill="${color}" stroke="white" stroke-width="2" ${pulseStyle}/><text x="14" y="19" font-size="14" fill="white" text-anchor="middle" font-family="sans-serif">🚐</text></svg>`;
   return L.divIcon({
     html: svg,
     iconSize: shape === "car" ? [28, 28] : [20, 20],
@@ -50,17 +51,25 @@ interface RouteMapProps {
   rides: Ride[];
   vehicles: Vehicle[];
   assignments: RouteAssignment[];
+  loading?: boolean;
 }
 
-export function RouteMap({ rides, vehicles, assignments }: RouteMapProps) {
+export function RouteMap({ rides, vehicles, assignments, loading }: RouteMapProps) {
   const rideMap = new Map(rides.map((r) => [r.id, r]));
 
-  // Build route lines per vehicle
+  // Use real polylines from Google Directions if available, fall back to straight lines
   const routeLines = assignments.map((a) => {
     const vehicle = vehicles.find((v) => v.id === a.vehicle_id);
     const color = VEHICLE_COLORS[a.vehicle_id] || "#6b7280";
-    const points: [number, number][] = [];
 
+    // If we have a real polyline from Google Directions, use it
+    if (a.polyline && a.polyline.length > 0) {
+      const points = a.polyline.map((p) => [p[0], p[1]] as [number, number]);
+      return { vehicleId: a.vehicle_id, color, points };
+    }
+
+    // Fallback: straight lines
+    const points: [number, number][] = [];
     if (vehicle) {
       points.push([vehicle.current_lat, vehicle.current_lng]);
     }
@@ -87,7 +96,7 @@ export function RouteMap({ rides, vehicles, assignments }: RouteMapProps) {
         <Marker
           key={`pickup-${r.id}`}
           position={[r.pickup_lat, r.pickup_lng]}
-          icon={createIcon("#22c55e", "circle")}
+          icon={createIcon("#22c55e", "circle", loading)}
         >
           <Popup>
             <strong>{r.id} Pickup</strong>
@@ -136,9 +145,8 @@ export function RouteMap({ rides, vehicles, assignments }: RouteMapProps) {
           positions={rl.points}
           pathOptions={{
             color: rl.color,
-            weight: 3,
-            opacity: 0.8,
-            dashArray: "8 4",
+            weight: 4,
+            opacity: 0.85,
           }}
         />
       ))}
