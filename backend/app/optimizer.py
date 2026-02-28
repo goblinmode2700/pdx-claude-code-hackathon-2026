@@ -205,13 +205,24 @@ OPTIMIZATION RULES (in priority order):
 
 6. Use the real drive times provided (if available) instead of straight-line distance estimates.
 
-Respond with ONLY valid JSON in this exact format:
+You MUST respond in exactly this two-part format:
+
+PART 1 — ANALYSIS (plain text, think out loud):
+Write your step-by-step reasoning as plain text paragraphs. Cover:
+- Which rides require specialized vehicles and why (reservation decisions)
+- How you're clustering rides geographically
+- Priority ordering decisions
+- Any trade-offs you're making
+
+PART 2 — JSON (after the text, on its own):
+Output the marker ===JSON=== on its own line, then valid JSON:
+===JSON===
 {{
   "assignments": [
     {{
       "vehicle_id": "V001",
       "ride_ids_in_order": ["R001", "R005"],
-      "reasoning": "Explain grouping AND any reservation decisions. E.g.: Reserved Van for R011 (7 pax) since it's the only vehicle with capacity >= 7. Assigned sedan to nearby R001+R005 cluster instead."
+      "reasoning": "Brief reasoning for this vehicle's assignment"
     }}
   ],
   "overall_strategy": "2-3 sentence summary including which vehicles were reserved and why",
@@ -237,26 +248,42 @@ async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
     # Stream Claude's response
     client = anthropic.AsyncAnthropic()
     full_text = ""
+    hit_json_marker = False
 
     async with client.messages.stream(
         model="claude-sonnet-4-20250514",
-        max_tokens=2048,
+        max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     ) as stream:
         async for text in stream.text_stream:
             full_text += text
-            yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+            # Only stream tokens that are part of the reasoning (before ===JSON===)
+            if not hit_json_marker:
+                if "===JSON===" in full_text:
+                    hit_json_marker = True
+                    # Send any remaining reasoning text before the marker
+                    pre_marker = text.split("===JSON===")[0]
+                    if pre_marker.strip():
+                        yield f"data: {json.dumps({'type': 'token', 'text': pre_marker})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
 
-    # Parse the completed response
+    # Parse the JSON part (after ===JSON===)
     try:
-        cleaned = full_text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1]
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
+        if "===JSON===" in full_text:
+            json_part = full_text.split("===JSON===", 1)[1].strip()
+        else:
+            # Fallback: try to find JSON in the full text
+            json_part = full_text.strip()
 
-        parsed = json.loads(cleaned)
+        # Strip markdown code fences if present
+        if json_part.startswith("```"):
+            json_part = json_part.split("\n", 1)[1]
+            if json_part.endswith("```"):
+                json_part = json_part[:-3]
+            json_part = json_part.strip()
+
+        parsed = json.loads(json_part)
         result = OptimizationResult(**parsed)
     except (json.JSONDecodeError, Exception) as e:
         yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to parse Claude response: {str(e)}'})}\n\n"
@@ -265,13 +292,21 @@ async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
     # Signal that we're now computing road routes
     yield f"data: {json.dumps({'type': 'status', 'message': 'Computing road routes...'})}\n\n"
 
-    # Enrich with polylines (both optimized and naive)
-    enriched_assignments, optimized_road_miles = await enrich_with_polylines(
-        result.assignments, rides, vehicles
-    )
-    result.assignments = enriched_assignments
+    # Enrich with polylines (both optimized and naive) — fallback to haversine on failure
+    try:
+        enriched_assignments, optimized_road_miles = await enrich_with_polylines(
+            result.assignments, rides, vehicles
+        )
+        result.assignments = enriched_assignments
+    except Exception:
+        optimized_road_miles = sum(compute_route_miles(a, rides, vehicles) for a in result.assignments)
 
-    naive_enriched, naive_road_miles = await enrich_with_polylines(naive_assignments, rides, vehicles)
+    try:
+        naive_enriched, naive_road_miles = await enrich_with_polylines(naive_assignments, rides, vehicles)
+    except Exception:
+        naive_enriched = naive_assignments
+        naive_road_miles = sum(compute_route_miles(a, rides, vehicles) for a in naive_assignments)
+
     optimized_violations = count_constraint_violations(result.assignments, rides, vehicles)
 
     final_data = {
@@ -299,33 +334,45 @@ async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
     naive_violations = count_constraint_violations(naive_assignments, rides, vehicles)
 
     # Enrich naive with real road distances
-    naive_enriched, naive_road_miles = await enrich_with_polylines(naive_assignments, rides, vehicles)
+    try:
+        naive_enriched, naive_road_miles = await enrich_with_polylines(naive_assignments, rides, vehicles)
+    except Exception:
+        naive_enriched = naive_assignments
+        naive_road_miles = naive_miles_haversine
 
     client = anthropic.AsyncAnthropic()
     message = await client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=2048,
+        max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
 
     raw = message.content[0].text
 
-    # Strip markdown code fences if present
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[1]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+    # Extract JSON part (after ===JSON=== marker)
+    if "===JSON===" in raw:
+        json_part = raw.split("===JSON===", 1)[1].strip()
+    else:
+        json_part = raw.strip()
 
-    parsed = json.loads(cleaned)
+    # Strip markdown code fences if present
+    if json_part.startswith("```"):
+        json_part = json_part.split("\n", 1)[1]
+        if json_part.endswith("```"):
+            json_part = json_part[:-3]
+        json_part = json_part.strip()
+
+    parsed = json.loads(json_part)
     result = OptimizationResult(**parsed)
 
     # Enrich with real road polylines + distances
-    enriched_assignments, optimized_road_miles = await enrich_with_polylines(
-        result.assignments, rides, vehicles
-    )
-    result.assignments = enriched_assignments
+    try:
+        enriched_assignments, optimized_road_miles = await enrich_with_polylines(
+            result.assignments, rides, vehicles
+        )
+        result.assignments = enriched_assignments
+    except Exception:
+        optimized_road_miles = sum(compute_route_miles(a, rides, vehicles) for a in result.assignments)
 
     optimized_violations = count_constraint_violations(result.assignments, rides, vehicles)
 

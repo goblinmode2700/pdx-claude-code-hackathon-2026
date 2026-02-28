@@ -43,13 +43,13 @@ export function ReasoningPanel({
             Claude is reasoning...
           </h2>
         </div>
-        <pre
-          ref={streamRef}
-          className="flex-1 bg-gray-900 text-green-400 rounded-lg p-3 text-xs font-mono
-                     overflow-y-auto whitespace-pre-wrap break-words opacity-50"
+        <div
+          ref={streamRef as React.RefObject<HTMLDivElement>}
+          className="flex-1 bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-sm text-gray-800
+                     overflow-y-auto whitespace-pre-wrap break-words leading-relaxed opacity-60"
         >
           {streamingText}
-        </pre>
+        </div>
         <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
           <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
           <span className="text-sm text-indigo-700 font-medium">{streamStatus}</span>
@@ -67,14 +67,14 @@ export function ReasoningPanel({
             Claude is reasoning...
           </h2>
         </div>
-        <pre
-          ref={streamRef}
-          className="flex-1 bg-gray-900 text-green-400 rounded-lg p-3 text-xs font-mono
-                     overflow-y-auto whitespace-pre-wrap break-words"
+        <div
+          ref={streamRef as React.RefObject<HTMLDivElement>}
+          className="flex-1 bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-sm text-gray-800
+                     overflow-y-auto whitespace-pre-wrap break-words leading-relaxed"
         >
           {streamingText}
-          <span className="animate-pulse">|</span>
-        </pre>
+          <span className="animate-pulse text-indigo-500">|</span>
+        </div>
       </div>
     );
   }
