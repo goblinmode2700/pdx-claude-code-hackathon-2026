@@ -252,7 +252,7 @@ function App() {
         </main>
 
         {/* Right sidebar — reasoning */}
-        <aside className="w-80 border-l bg-gray-50/50 p-3 overflow-y-auto">
+        <aside className="w-80 border-l bg-gray-50/50 p-3 overflow-y-auto min-h-0">
           <ReasoningPanel
             result={optimizeResponse?.result ?? null}
             loading={loading}

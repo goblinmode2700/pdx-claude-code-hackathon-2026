@@ -103,7 +103,7 @@ export function ReasoningPanel({
   const pctSaved = nm > 0 ? Math.round((milesSaved / nm) * 100) : null;
 
   return (
-    <div className="flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-180px)]">
+    <div className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
         Naive vs AI Optimized
       </h2>
