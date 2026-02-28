@@ -212,6 +212,65 @@ Respond with ONLY valid JSON in this exact format:
 Think carefully about geographic proximity, time windows, capacity, and luggage. Every ride should be assigned if possible."""
 
 
+async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
+    """Streaming version of optimize. Yields SSE events as Claude generates tokens."""
+    import asyncio as _asyncio
+
+    # Start drive times + naive baseline in parallel
+    drive_times_task = _asyncio.create_task(_build_drive_time_context(rides, vehicles))
+
+    naive_assignments, _ = naive_assign(rides, vehicles)
+    naive_violations = count_constraint_violations(naive_assignments, rides, vehicles)
+
+    drive_times = await drive_times_task
+    prompt = build_prompt(rides, vehicles, drive_times)
+
+    # Stream Claude's response
+    client = anthropic.AsyncAnthropic()
+    full_text = ""
+
+    async with client.messages.stream(
+        model="claude-sonnet-4-20250514",
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        async for text in stream.text_stream:
+            full_text += text
+            yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+
+    # Parse the completed response
+    cleaned = full_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+    parsed = json.loads(cleaned)
+    result = OptimizationResult(**parsed)
+
+    # Enrich with polylines (both optimized and naive)
+    enriched_assignments, optimized_road_miles = await enrich_with_polylines(
+        result.assignments, rides, vehicles
+    )
+    result.assignments = enriched_assignments
+
+    naive_enriched, naive_road_miles = await enrich_with_polylines(naive_assignments, rides, vehicles)
+    optimized_violations = count_constraint_violations(result.assignments, rides, vehicles)
+
+    final_data = {
+        "result": result.model_dump(),
+        "prompt_used": prompt,
+        "naive_miles": round(naive_road_miles, 1),
+        "optimized_miles": round(optimized_road_miles, 1),
+        "naive_violations": sum(naive_violations.values()),
+        "optimized_violations": sum(optimized_violations.values()),
+        "naive_assignments": [a.model_dump() for a in naive_enriched],
+    }
+
+    yield f"data: {json.dumps({'type': 'result', 'data': final_data})}\n\n"
+
+
 async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
     """Call Claude to optimize routes. Returns full comparison data."""
     # Get real drive times for the prompt (async, non-blocking)

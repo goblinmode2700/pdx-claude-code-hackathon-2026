@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import type { Ride, Vehicle, OptimizeResponse, ScenarioInfo, RouteAssignment } from "./types";
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { Ride, Vehicle, OptimizeResponse, ScenarioInfo } from "./types";
 import { RouteMap } from "./components/RouteMap";
 import { RidePanel } from "./components/RidePanel";
 import { VehiclePanel } from "./components/VehiclePanel";
@@ -16,6 +16,8 @@ function App() {
   const [scenarios, setScenarios] = useState<Record<string, ScenarioInfo>>({});
   const [activeScenario, setActiveScenario] = useState("downtown_mix");
   const [routeView, setRouteView] = useState<RouteView>("optimized");
+  const [streamingText, setStreamingText] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load scenarios list
   useEffect(() => {
@@ -30,6 +32,7 @@ function App() {
     setOptimizeResponse(null);
     setError(null);
     setRouteView("optimized");
+    setStreamingText("");
     fetch(`/api/seed?scenario=${activeScenario}`)
       .then((r) => r.json())
       .then((data) => {
@@ -42,23 +45,74 @@ function App() {
   const handleOptimize = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setStreamingText("");
+    setOptimizeResponse(null);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const res = await fetch("/api/optimize", {
+      const res = await fetch("/api/optimize-stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rides, vehicles }),
+        signal: controller.signal,
       });
+
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
       }
-      const data: OptimizeResponse = await res.json();
-      setOptimizeResponse(data);
-      setRouteView("optimized");
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = JSON.parse(line.slice(6));
+
+          if (payload.type === "token") {
+            setStreamingText((prev) => prev + payload.text);
+          } else if (payload.type === "result") {
+            const data = payload.data as OptimizeResponse;
+            setOptimizeResponse(data);
+            setRouteView("optimized");
+          }
+        }
+      }
     } catch (e) {
-      setError(`Optimization failed: ${(e as Error).message}`);
+      if ((e as Error).name === "AbortError") return;
+      // Fallback to non-streaming endpoint
+      try {
+        const res = await fetch("/api/optimize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rides, vehicles }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+        }
+        const data: OptimizeResponse = await res.json();
+        setOptimizeResponse(data);
+        setRouteView("optimized");
+      } catch (fallbackErr) {
+        setError(`Optimization failed: ${(fallbackErr as Error).message}`);
+      }
     } finally {
       setLoading(false);
+      abortRef.current = null;
     }
   }, [rides, vehicles]);
 
@@ -157,6 +211,7 @@ function App() {
           <ReasoningPanel
             result={optimizeResponse?.result ?? null}
             loading={loading}
+            streamingText={streamingText}
             naiveMiles={optimizeResponse?.naive_miles ?? null}
             optimizedMiles={optimizeResponse?.optimized_miles ?? null}
             naiveViolations={optimizeResponse?.naive_violations ?? null}

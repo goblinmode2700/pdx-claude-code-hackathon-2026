@@ -5,10 +5,11 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .models import OptimizeRequest, OptimizeResponse, OptimizationResult
 from .seed import SCENARIOS
-from .optimizer import optimize
+from .optimizer import optimize, optimize_stream
 
 app = FastAPI(title="Fleet Route Optimizer", version="0.1.0")
 
@@ -56,6 +57,16 @@ async def optimize_routes(request: OptimizeRequest) -> OptimizeResponse:
         naive_violations=data["naive_violations"],
         optimized_violations=data["optimized_violations"],
         naive_assignments=data["naive_assignments"],
+    )
+
+
+@app.post("/optimize-stream")
+async def optimize_routes_stream(request: OptimizeRequest):
+    """Stream Claude's reasoning tokens, then send the final result."""
+    return StreamingResponse(
+        optimize_stream(request.rides, request.vehicles),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

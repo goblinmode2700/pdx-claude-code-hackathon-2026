@@ -1,8 +1,10 @@
+import { useEffect, useRef } from "react";
 import type { OptimizationResult } from "../types";
 
 interface ReasoningPanelProps {
   result: OptimizationResult | null;
   loading: boolean;
+  streamingText: string;
   naiveMiles: number | null;
   optimizedMiles: number | null;
   naiveViolations: number | null;
@@ -12,16 +14,47 @@ interface ReasoningPanelProps {
 export function ReasoningPanel({
   result,
   loading,
+  streamingText,
   naiveMiles,
   optimizedMiles,
   naiveViolations,
   optimizedViolations,
 }: ReasoningPanelProps) {
+  const streamRef = useRef<HTMLPreElement>(null);
+
+  // Auto-scroll streaming text
+  useEffect(() => {
+    if (streamRef.current) {
+      streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    }
+  }, [streamingText]);
+
+  if (loading && streamingText) {
+    return (
+      <div className="flex flex-col gap-3 h-full">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+            Claude is reasoning...
+          </h2>
+        </div>
+        <pre
+          ref={streamRef}
+          className="flex-1 bg-gray-900 text-green-400 rounded-lg p-3 text-xs font-mono
+                     overflow-y-auto whitespace-pre-wrap break-words"
+        >
+          {streamingText}
+          <span className="animate-pulse">|</span>
+        </pre>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
         <div className="w-8 h-8 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
-        <span className="text-sm">Claude is thinking...</span>
+        <span className="text-sm">Connecting to Claude...</span>
       </div>
     );
   }
