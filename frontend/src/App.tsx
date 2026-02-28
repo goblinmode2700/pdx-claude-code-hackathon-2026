@@ -181,7 +181,7 @@ function App() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar — rides + vehicles */}
         <aside className="w-72 border-r bg-gray-50/50 p-3 overflow-y-auto flex flex-col gap-4">
-          <RidePanel rides={rides} assignments={visibleAssignments} />
+          <RidePanel rides={rides} vehicles={vehicles} assignments={visibleAssignments} />
           <VehiclePanel vehicles={vehicles} assignments={visibleAssignments} />
         </aside>
 

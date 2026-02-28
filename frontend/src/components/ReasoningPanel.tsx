@@ -110,42 +110,46 @@ export function ReasoningPanel({
 
       {/* Comparison card */}
       {showComparison && (
-        <div className="bg-gradient-to-r from-red-50 to-green-50 border rounded-lg p-3">
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <div>
-              <div className="text-[10px] uppercase font-semibold text-red-500 tracking-wide">Round-Robin</div>
-              <div className="text-xl font-bold text-red-600">{naiveMiles} mi</div>
-              {naiveViolations != null && naiveViolations > 0 && (
-                <div className="text-[10px] text-red-500 mt-0.5">
-                  {naiveViolations} constraint violation{naiveViolations !== 1 ? "s" : ""}
-                </div>
-              )}
-              {naiveViolations === 0 && (
-                <div className="text-[10px] text-gray-400 mt-0.5">0 violations</div>
-              )}
-            </div>
-            <div>
-              <div className="text-[10px] uppercase font-semibold text-green-600 tracking-wide">AI Optimized</div>
-              <div className="text-xl font-bold text-green-700">{optimizedMiles} mi</div>
-              {optimizedViolations != null && (
-                <div className="text-[10px] text-green-600 mt-0.5">
-                  {optimizedViolations === 0 ? "0 violations" : `${optimizedViolations} violation${optimizedViolations !== 1 ? "s" : ""}`}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="border rounded-lg overflow-hidden">
+          {/* Savings hero */}
           {milesSaved != null && milesSaved > 0 && (
-            <div className="text-center mt-2 text-lg font-bold text-green-700 bg-green-100 rounded-md py-1.5">
-              {milesSaved.toFixed(1)} mi saved
-              <span className="text-2xl ml-1">{pctSaved}%</span>
-              <span className="text-xs font-medium ml-1">more efficient</span>
+            <div className="bg-green-600 text-white text-center py-3 px-3">
+              <div className="text-3xl font-black tracking-tight">{pctSaved}%</div>
+              <div className="text-sm font-medium opacity-90">more efficient</div>
+              <div className="text-xs opacity-75 mt-0.5">{milesSaved.toFixed(1)} miles saved</div>
             </div>
           )}
           {milesSaved != null && milesSaved <= 0 && naiveViolations != null && naiveViolations > optimizedViolations! && (
-            <div className="text-center mt-2 text-sm font-semibold text-green-700 bg-green-100 rounded-md py-1">
-              {naiveViolations - optimizedViolations!} fewer constraint violations
+            <div className="bg-green-600 text-white text-center py-3 px-3">
+              <div className="text-3xl font-black tracking-tight">{naiveViolations - optimizedViolations!}</div>
+              <div className="text-sm font-medium opacity-90">fewer violations</div>
             </div>
           )}
+          {/* Stats rows */}
+          <div className="divide-y">
+            <div className="flex items-center justify-between px-3 py-2 bg-red-50">
+              <span className="text-xs font-semibold text-red-500 uppercase tracking-wide">Round-Robin</span>
+              <div className="text-right">
+                <span className="text-lg font-bold text-red-600">{naiveMiles} mi</span>
+                {naiveViolations != null && naiveViolations > 0 && (
+                  <span className="text-[10px] text-red-400 ml-2">
+                    {naiveViolations} violation{naiveViolations !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2 bg-green-50">
+              <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">AI Optimized</span>
+              <div className="text-right">
+                <span className="text-lg font-bold text-green-700">{optimizedMiles} mi</span>
+                {optimizedViolations != null && (
+                  <span className="text-[10px] text-green-500 ml-2">
+                    {optimizedViolations === 0 ? "0 violations" : `${optimizedViolations} violation${optimizedViolations !== 1 ? "s" : ""}`}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
