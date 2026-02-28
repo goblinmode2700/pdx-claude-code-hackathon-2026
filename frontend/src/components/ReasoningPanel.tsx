@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { OptimizationResult } from "../types";
 
 interface ReasoningPanelProps {
@@ -10,6 +10,7 @@ interface ReasoningPanelProps {
   optimizedMiles: number | null;
   naiveViolations: number | null;
   optimizedViolations: number | null;
+  promptUsed: string | null;
 }
 
 export function ReasoningPanel({
@@ -21,8 +22,10 @@ export function ReasoningPanel({
   optimizedMiles,
   naiveViolations,
   optimizedViolations,
+  promptUsed,
 }: ReasoningPanelProps) {
   const streamRef = useRef<HTMLPreElement>(null);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   // Auto-scroll streaming text
   useEffect(() => {
@@ -132,8 +135,10 @@ export function ReasoningPanel({
             </div>
           </div>
           {milesSaved != null && milesSaved > 0 && (
-            <div className="text-center mt-2 text-sm font-semibold text-green-700 bg-green-100 rounded-md py-1">
-              {milesSaved.toFixed(1)} miles saved ({pctSaved}% more efficient)
+            <div className="text-center mt-2 text-lg font-bold text-green-700 bg-green-100 rounded-md py-1.5">
+              {milesSaved.toFixed(1)} mi saved
+              <span className="text-2xl ml-1">{pctSaved}%</span>
+              <span className="text-xs font-medium ml-1">more efficient</span>
             </div>
           )}
           {milesSaved != null && milesSaved <= 0 && naiveViolations != null && naiveViolations > optimizedViolations! && (
@@ -154,8 +159,15 @@ export function ReasoningPanel({
 
       {result.assignments.map((a) => (
         <div key={a.vehicle_id} className="bg-white border rounded-lg p-3 shadow-sm">
-          <div className="font-semibold text-sm mb-1">
-            {a.vehicle_id}: {a.ride_ids_in_order.join(" → ")}
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-semibold text-sm">
+              {a.vehicle_id}: {a.ride_ids_in_order.join(" → ")}
+            </span>
+            {a.route_miles > 0 && (
+              <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                {a.route_miles} mi
+              </span>
+            )}
           </div>
           <p className="text-xs text-gray-600">{a.reasoning}</p>
         </div>
@@ -164,6 +176,27 @@ export function ReasoningPanel({
       {result.unassigned_rides.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
           <strong>Unassigned:</strong> {result.unassigned_rides.join(", ")}
+        </div>
+      )}
+
+      {/* Prompt viewer */}
+      {promptUsed && (
+        <div className="border-t pt-3 mt-1">
+          <button
+            onClick={() => setShowPrompt(!showPrompt)}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1"
+          >
+            <span className={`inline-block transition-transform ${showPrompt ? "rotate-90" : ""}`}>
+              ▶
+            </span>
+            View Prompt Sent to Claude
+          </button>
+          {showPrompt && (
+            <pre className="mt-2 bg-gray-50 border rounded-lg p-3 text-[10px] font-mono text-gray-600
+                            overflow-x-auto whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
+              {promptUsed}
+            </pre>
+          )}
         </div>
       )}
     </div>

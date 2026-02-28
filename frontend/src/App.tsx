@@ -225,6 +225,7 @@ function App() {
             optimizedMiles={optimizeResponse?.optimized_miles ?? null}
             naiveViolations={optimizeResponse?.naive_violations ?? null}
             optimizedViolations={optimizeResponse?.optimized_violations ?? null}
+            promptUsed={optimizeResponse?.prompt_used ?? null}
           />
         </aside>
       </div>

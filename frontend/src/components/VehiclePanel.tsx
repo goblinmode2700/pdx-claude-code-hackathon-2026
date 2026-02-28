@@ -28,12 +28,20 @@ export function VehiclePanel({ vehicles, assignments }: VehiclePanelProps) {
               </div>
               <div className="flex gap-3 text-xs text-gray-500">
                 <span>Cap: {v.capacity}</span>
-                <span className="capitalize">{v.status.replace("_", " ")}</span>
+                <span>Lug: {v.luggage_capacity}</span>
+                <span className="capitalize">{v.vehicle_type}</span>
               </div>
               {assignment && (
                 <div className="mt-2 text-xs text-gray-600 bg-gray-50 rounded p-2">
-                  <div className="font-medium mb-0.5">
-                    Route: {assignment.ride_ids_in_order.join(" → ")}
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="font-medium">
+                      {assignment.ride_ids_in_order.join(" → ")}
+                    </span>
+                    {assignment.route_miles > 0 && (
+                      <span className="font-semibold text-indigo-600">
+                        {assignment.route_miles} mi
+                      </span>
+                    )}
                   </div>
                   <div className="text-gray-400 italic">{assignment.reasoning}</div>
                 </div>
