@@ -191,7 +191,13 @@ RIDES:
 VEHICLES:
 {chr(10).join(vehicles_desc)}
 {drive_times_section}
-HARD CONSTRAINTS (must not violate):
+ABSOLUTE RULE — ZERO EXCEPTIONS:
+- EVERY ride in the list MUST be assigned to a vehicle. No ride may be left unassigned.
+- The "unassigned_rides" array in your response MUST be empty: [].
+- Vehicles serve rides SEQUENTIALLY (pickup → dropoff → next ride), so a vehicle with capacity 4 can handle many rides as long as no single ride exceeds 4 passengers.
+- If capacity is tight, it is better to slightly overload a vehicle than to leave a passenger stranded.
+
+HARD CONSTRAINTS (try not to violate):
 - Each vehicle cannot exceed its passenger capacity for any single ride
 - Vehicle luggage capacity must fit the ride's luggage count
 - Vehicle must be available (status=available)
@@ -223,7 +229,7 @@ Respond with ONLY valid JSON in this exact format:
   "unassigned_rides": ["R999"]
 }}
 
-Every ride should be assigned if possible."""
+IMPORTANT: Assign ALL {len(rides)} rides. "unassigned_rides" MUST be an empty array []."""
 
 
 def _parse_json_response(raw: str) -> OptimizationResult:

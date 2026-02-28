@@ -88,9 +88,10 @@ function App() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (!done) {
+          buffer += decoder.decode(value, { stream: true });
+        }
 
-        buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
 
@@ -110,6 +111,19 @@ function App() {
             setOptimizeResponse(data);
             setRouteView("optimized");
           }
+        }
+
+        // Process any remaining buffer content after stream ends
+        if (done) {
+          if (buffer.startsWith("data: ")) {
+            const payload = JSON.parse(buffer.slice(6));
+            if (payload.type === "result") {
+              setStreamStatus(null);
+              setOptimizeResponse(payload.data as OptimizeResponse);
+              setRouteView("optimized");
+            }
+          }
+          break;
         }
       }
     } catch (e) {
