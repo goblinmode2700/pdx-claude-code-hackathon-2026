@@ -50,6 +50,7 @@ export interface OptimizeResponse {
   optimized_miles: number;
   naive_violations: number;
   optimized_violations: number;
+  naive_assignments: RouteAssignment[];
 }
 
 export interface ScenarioInfo {

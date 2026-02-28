@@ -55,6 +55,7 @@ async def optimize_routes(request: OptimizeRequest) -> OptimizeResponse:
         optimized_miles=round(data["optimized_miles"], 1),
         naive_violations=data["naive_violations"],
         optimized_violations=data["optimized_violations"],
+        naive_assignments=data["naive_assignments"],
     )
 
 

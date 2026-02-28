@@ -261,4 +261,5 @@ async def optimize(rides: list[Ride], vehicles: list[Vehicle]) -> dict:
         "optimized_miles": round(optimized_road_miles, 1),
         "naive_violations": sum(naive_violations.values()),
         "optimized_violations": sum(optimized_violations.values()),
+        "naive_assignments": naive_enriched,
     }

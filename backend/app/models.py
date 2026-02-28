@@ -85,3 +85,4 @@ class OptimizeResponse(BaseModel):
     optimized_miles: float = 0.0
     naive_violations: int = 0
     optimized_violations: int = 0
+    naive_assignments: list[RouteAssignment] = []

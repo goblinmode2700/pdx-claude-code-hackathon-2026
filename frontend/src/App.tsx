@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Ride, Vehicle, OptimizeResponse, ScenarioInfo } from "./types";
+import type { Ride, Vehicle, OptimizeResponse, ScenarioInfo, RouteAssignment } from "./types";
 import { RouteMap } from "./components/RouteMap";
 import { RidePanel } from "./components/RidePanel";
 import { VehiclePanel } from "./components/VehiclePanel";
 import { ReasoningPanel } from "./components/ReasoningPanel";
+
+type RouteView = "optimized" | "naive" | "both";
 
 function App() {
   const [rides, setRides] = useState<Ride[]>([]);
@@ -13,6 +15,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [scenarios, setScenarios] = useState<Record<string, ScenarioInfo>>({});
   const [activeScenario, setActiveScenario] = useState("downtown_mix");
+  const [routeView, setRouteView] = useState<RouteView>("optimized");
 
   // Load scenarios list
   useEffect(() => {
@@ -26,6 +29,7 @@ function App() {
   useEffect(() => {
     setOptimizeResponse(null);
     setError(null);
+    setRouteView("optimized");
     fetch(`/api/seed?scenario=${activeScenario}`)
       .then((r) => r.json())
       .then((data) => {
@@ -50,12 +54,17 @@ function App() {
       }
       const data: OptimizeResponse = await res.json();
       setOptimizeResponse(data);
+      setRouteView("optimized");
     } catch (e) {
       setError(`Optimization failed: ${(e as Error).message}`);
     } finally {
       setLoading(false);
     }
   }, [rides, vehicles]);
+
+  // Compute which assignments to show on map based on toggle
+  const visibleAssignments = optimizeResponse?.result.assignments ?? [];
+  const naiveAssignments = optimizeResponse?.naive_assignments ?? [];
 
   return (
     <div className="h-screen flex flex-col">
@@ -110,18 +119,37 @@ function App() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar — rides + vehicles */}
         <aside className="w-72 border-r bg-gray-50/50 p-3 overflow-y-auto flex flex-col gap-4">
-          <RidePanel rides={rides} assignments={optimizeResponse?.result.assignments ?? []} />
-          <VehiclePanel vehicles={vehicles} assignments={optimizeResponse?.result.assignments ?? []} />
+          <RidePanel rides={rides} assignments={visibleAssignments} />
+          <VehiclePanel vehicles={vehicles} assignments={visibleAssignments} />
         </aside>
 
         {/* Center — map */}
-        <main className="flex-1 p-3">
+        <main className="flex-1 p-3 relative">
           <RouteMap
             rides={rides}
             vehicles={vehicles}
-            assignments={optimizeResponse?.result.assignments ?? []}
+            assignments={routeView === "naive" ? naiveAssignments : visibleAssignments}
+            naiveAssignments={routeView === "both" ? naiveAssignments : []}
             loading={loading}
           />
+          {/* Route view toggle — only show after optimization */}
+          {optimizeResponse && !loading && (
+            <div className="absolute top-5 right-5 z-[1000] bg-white rounded-lg shadow-lg border p-1 flex gap-0.5">
+              {(["naive", "both", "optimized"] as const).map((view) => (
+                <button
+                  key={view}
+                  onClick={() => setRouteView(view)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    routeView === view
+                      ? "bg-indigo-600 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {view === "naive" ? "Naive" : view === "optimized" ? "AI Optimized" : "Both"}
+                </button>
+              ))}
+            </div>
+          )}
         </main>
 
         {/* Right sidebar — reasoning */}

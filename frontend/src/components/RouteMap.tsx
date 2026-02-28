@@ -47,28 +47,22 @@ function FitBounds({ rides, vehicles }: { rides: Ride[]; vehicles: Vehicle[] }) 
   return null;
 }
 
-interface RouteMapProps {
-  rides: Ride[];
-  vehicles: Vehicle[];
-  assignments: RouteAssignment[];
-  loading?: boolean;
-}
-
-export function RouteMap({ rides, vehicles, assignments, loading }: RouteMapProps) {
+function buildRouteLines(
+  assignments: RouteAssignment[],
+  rides: Ride[],
+  vehicles: Vehicle[],
+  colorOverride?: string,
+) {
   const rideMap = new Map(rides.map((r) => [r.id, r]));
-
-  // Use real polylines from Google Directions if available, fall back to straight lines
-  const routeLines = assignments.map((a) => {
+  return assignments.map((a) => {
     const vehicle = vehicles.find((v) => v.id === a.vehicle_id);
-    const color = VEHICLE_COLORS[a.vehicle_id] || "#6b7280";
+    const color = colorOverride || VEHICLE_COLORS[a.vehicle_id] || "#6b7280";
 
-    // If we have a real polyline from Google Directions, use it
     if (a.polyline && a.polyline.length > 0) {
       const points = a.polyline.map((p) => [p[0], p[1]] as [number, number]);
       return { vehicleId: a.vehicle_id, color, points };
     }
 
-    // Fallback: straight lines
     const points: [number, number][] = [];
     if (vehicle) {
       points.push([vehicle.current_lat, vehicle.current_lng]);
@@ -82,6 +76,19 @@ export function RouteMap({ rides, vehicles, assignments, loading }: RouteMapProp
     }
     return { vehicleId: a.vehicle_id, color, points };
   });
+}
+
+interface RouteMapProps {
+  rides: Ride[];
+  vehicles: Vehicle[];
+  assignments: RouteAssignment[];
+  naiveAssignments?: RouteAssignment[];
+  loading?: boolean;
+}
+
+export function RouteMap({ rides, vehicles, assignments, naiveAssignments = [], loading }: RouteMapProps) {
+  const routeLines = buildRouteLines(assignments, rides, vehicles);
+  const naiveLines = buildRouteLines(naiveAssignments, rides, vehicles, "#9ca3af");
 
   return (
     <MapContainer center={PORTLAND_CENTER} zoom={12} className="h-full w-full rounded-lg">
@@ -90,6 +97,33 @@ export function RouteMap({ rides, vehicles, assignments, loading }: RouteMapProp
         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
       />
       <FitBounds rides={rides} vehicles={vehicles} />
+
+      {/* Naive route lines (dashed gray, rendered underneath) */}
+      {naiveLines.map((rl) => (
+        <Polyline
+          key={`naive-${rl.vehicleId}`}
+          positions={rl.points}
+          pathOptions={{
+            color: rl.color,
+            weight: 3,
+            opacity: 0.5,
+            dashArray: "8 6",
+          }}
+        />
+      ))}
+
+      {/* Optimized route lines (solid colored, on top) */}
+      {routeLines.map((rl) => (
+        <Polyline
+          key={`route-${rl.vehicleId}`}
+          positions={rl.points}
+          pathOptions={{
+            color: rl.color,
+            weight: 4,
+            opacity: 0.85,
+          }}
+        />
+      ))}
 
       {/* Pickup markers (circles) */}
       {rides.map((r) => (
@@ -136,19 +170,6 @@ export function RouteMap({ rides, vehicles, assignments, loading }: RouteMapProp
             Cap: {v.capacity} | {v.status}
           </Popup>
         </Marker>
-      ))}
-
-      {/* Route lines */}
-      {routeLines.map((rl) => (
-        <Polyline
-          key={`route-${rl.vehicleId}`}
-          positions={rl.points}
-          pathOptions={{
-            color: rl.color,
-            weight: 4,
-            opacity: 0.85,
-          }}
-        />
       ))}
     </MapContainer>
   );
