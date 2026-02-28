@@ -156,6 +156,24 @@ DOWNTOWN_MIX_RIDES: list[Ride] = [
         dropoff_label="Old Town Chinatown",
         service_type=ServiceType.POINT_TO_POINT,
     ),
+    # Reservation logic test: 7 pax REQUIRES Van Charlie (cap 8).
+    # Van is at St. Johns (near R007), but must be held for this ride.
+    Ride(
+        id="R011",
+        pickup_lat=45.4870,
+        pickup_lng=-122.8030,
+        dropoff_lat=45.5200,
+        dropoff_lng=-122.6800,
+        time_window_start="2026-02-28T10:30:00",
+        time_window_end="2026-02-28T11:00:00",
+        passenger_count=7,
+        priority=Priority.HIGH,
+        pickup_label="Beaverton",
+        dropoff_label="Downtown Portland",
+        service_type=ServiceType.TRANSFER,
+        luggage_count=6,
+        notes="Corporate retreat group — 7 passengers, needs large vehicle",
+    ),
 ]
 
 # --- Scenario: Airport Rush (4-5 AM PDX departures) ---

@@ -186,15 +186,24 @@ RIDES:
 VEHICLES:
 {chr(10).join(vehicles_desc)}
 {drive_times_section}
-CONSTRAINTS:
+HARD CONSTRAINTS (must not violate):
 - Each vehicle cannot exceed its passenger capacity for any single ride
-- Consider luggage capacity — vehicles with limited luggage space should not be assigned heavy-luggage rides
-- Prioritize URGENT and HIGH priority rides — they must be assigned first
-- Minimize total travel distance and respect time windows
-- A vehicle can handle multiple rides if sequenced efficiently (i.e., dropoff of one ride is near pickup of next)
-- Consider geographic clustering — assign nearby rides to the same vehicle
-- For airport departure rides, ensure pickup time allows enough travel time to reach the airport before the flight
-- Use the real drive times provided (if available) instead of straight-line distance estimates
+- Vehicle luggage capacity must fit the ride's luggage count
+- Vehicle must be available (status=available)
+
+OPTIMIZATION RULES (in priority order):
+1. RESERVATION LOGIC (critical — read carefully):
+   Before assigning ANY rides, scan the full batch and identify rides that REQUIRE a specific vehicle's capability (e.g., high passenger count that only one vehicle can handle, heavy luggage that only one vehicle fits). RESERVE those vehicles for those rides, even if the vehicle is geographically closer to a simpler ride. Do NOT waste a specialized vehicle on a generic ride when a specialized ride needs it later. In your reasoning, explicitly call out reservation decisions: "Reserved [vehicle] for [ride] because it is the only vehicle that can handle [constraint]."
+
+2. PRIORITY: Assign URGENT and HIGH priority rides first — they get first pick of vehicles.
+
+3. GEOGRAPHIC CLUSTERING: Group nearby rides on the same vehicle. Sequence rides so dropoff of one is near pickup of the next to minimize deadhead miles.
+
+4. TIME WINDOWS: Respect pickup windows. For airport departures, ensure enough travel time to reach the airport before the flight.
+
+5. LOAD BALANCING: Spread rides across vehicles. Avoid overloading one vehicle while others sit idle.
+
+6. Use the real drive times provided (if available) instead of straight-line distance estimates.
 
 Respond with ONLY valid JSON in this exact format:
 {{
@@ -202,14 +211,14 @@ Respond with ONLY valid JSON in this exact format:
     {{
       "vehicle_id": "V001",
       "ride_ids_in_order": ["R001", "R005"],
-      "reasoning": "Brief explanation of why these rides are grouped and ordered this way"
+      "reasoning": "Explain grouping AND any reservation decisions. E.g.: Reserved Van for R011 (7 pax) since it's the only vehicle with capacity >= 7. Assigned sedan to nearby R001+R005 cluster instead."
     }}
   ],
-  "overall_strategy": "2-3 sentence summary of your optimization approach",
+  "overall_strategy": "2-3 sentence summary including which vehicles were reserved and why",
   "unassigned_rides": ["R999"]
 }}
 
-Think carefully about geographic proximity, time windows, capacity, and luggage. Every ride should be assigned if possible."""
+Think step by step: first identify which rides REQUIRE specific vehicles, reserve those, then optimize the remaining assignments by proximity and time. Every ride should be assigned if possible."""
 
 
 async def optimize_stream(rides: list[Ride], vehicles: list[Vehicle]):
