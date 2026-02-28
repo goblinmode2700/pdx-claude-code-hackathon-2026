@@ -44,6 +44,19 @@ function App() {
       .catch((e) => setError(`Failed to load seed data: ${e.message}`));
   }, [activeScenario]);
 
+  const handleReset = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setOptimizeResponse(null);
+    setLoading(false);
+    setError(null);
+    setStreamingText("");
+    setStreamStatus(null);
+    setRouteView("optimized");
+  }, []);
+
   const handleOptimize = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -163,6 +176,16 @@ function App() {
                 Retry
               </button>
             </div>
+          )}
+
+          {(optimizeResponse || loading) && (
+            <button
+              onClick={handleReset}
+              className="px-3 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-lg
+                         hover:bg-gray-200 transition-colors"
+            >
+              Reset
+            </button>
           )}
 
           <button
