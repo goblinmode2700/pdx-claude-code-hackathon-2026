@@ -24,7 +24,7 @@ export function ReasoningPanel({
   optimizedViolations,
   promptUsed,
 }: ReasoningPanelProps) {
-  const streamRef = useRef<HTMLPreElement>(null);
+  const streamRef = useRef<HTMLDivElement>(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
   // Auto-scroll streaming text
@@ -44,7 +44,7 @@ export function ReasoningPanel({
           </h2>
         </div>
         <div
-          ref={streamRef as React.RefObject<HTMLDivElement>}
+          ref={streamRef}
           className="flex-1 bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-sm text-gray-800
                      overflow-y-auto whitespace-pre-wrap break-words leading-relaxed opacity-60"
         >
@@ -68,7 +68,7 @@ export function ReasoningPanel({
           </h2>
         </div>
         <div
-          ref={streamRef as React.RefObject<HTMLDivElement>}
+          ref={streamRef}
           className="flex-1 bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-sm text-gray-800
                      overflow-y-auto whitespace-pre-wrap break-words leading-relaxed"
         >
